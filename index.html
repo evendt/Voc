@@ -124,7 +124,7 @@ const BASE=[
  {en:'other',de:'andere(r, s)',da:['andere','anderer','anderes','anderen'],s:['Tom is here. Where are the ___ children?','other']}
 ];
 const KEY='wordtrip-v1';
-let S={xp:0,streak:0,last:'',m:{},custom:[],best:0};
+let S={xp:0,streak:0,last:'',m:{},custom:[],best:0,hidden:[]};
 try{const r=JSON.parse(localStorage.getItem(KEY)||'null'); if(r&&typeof r==='object') S=Object.assign(S,r);}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 const TTS='speechSynthesis' in window && typeof SpeechSynthesisUtterance!=='undefined';
@@ -132,7 +132,8 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rnd=n=>Math.floor(Math.random()*n);
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
-const words=()=>BASE.concat(S.custom.map(c=>({en:c.en,de:c.de,custom:true})));
+if(!Array.isArray(S.hidden))S.hidden=[];
+const words=()=>BASE.filter(w=>!S.hidden.includes(w.en)).concat(S.custom.map(c=>({en:c.en,de:c.de,custom:true})));
 const mast=w=>S.m[w.en]||0;
 const bump=(w,d)=>{S.m[w.en]=Math.max(0,Math.min(5,mast(w)+d))};
 const norm=s=>(' '+String(s).toLowerCase().replace(/[’`´]/g,"'").replace(/[.,!?()]/g,' ')+' ')
@@ -293,7 +294,9 @@ function vList(){
    <p class="muted small">Die grünen Punkte zeigen, wie sicher ein Wort schon sitzt.</p>
    <div class="wl">${ws.map(w=>`<div><span><b>${esc(w.en)}</b><br><span class="muted">${esc(w.de)}</span></span>
       <span class="dots" style="flex:none" aria-label="Stufe ${mast(w)} von 5">${[1,2,3,4,5].map(n=>`<i class="${mast(w)>=n?'on':''}"></i>`).join('')}</span>${spk(w.en)}
-      ${w.custom?`<button class="del" data-a="del" data-v="${esc(w.en)}" aria-label="${esc(w.en)} löschen">Löschen</button>`:''}</div>`).join('')}</div>
+      <button class="del" data-a="del" data-v="${esc(w.en)}" aria-label="${esc(w.en)} löschen">Löschen</button></div>`).join('')}</div>
+   ${L.msg?`<p class="err">${L.msg}</p>`:''}
+   ${S.hidden.length?`<button class="link" data-a="restore">${S.hidden.length===1?'1 gelöschtes Wort':S.hidden.length+' gelöschte Wörter'} aus der Grundliste wiederherstellen</button>`:''}
    <form class="panel col" data-f="add"><p class="label">Eigenes Wort ergänzen</p>
      <input id="new-en" class="inp" type="text" placeholder="Englisch" aria-label="Englisches Wort" autocomplete="off" autocapitalize="off">
      <input id="new-de" class="inp" type="text" placeholder="Deutsch" aria-label="Deutsche Übersetzung" autocomplete="off" autocapitalize="off">
@@ -333,7 +336,10 @@ const ACT={
   flip(){F.flip=!F.flip;render()},
   again(){F.q.push(F.q.shift());F.flip=false;render()},
   known(){F.q.shift();F.flip=false;if(!F.q.length){D={title:'Alle Karten durch!',stars:3,lines:['Jetzt bist du bereit für eine gemischte Runde.'],weak:[],again:'mix'};V='done'}render()},
-  del(v){S.custom=S.custom.filter(c=>c.en!==v);delete S.m[v];save();render()},
+  del(v){if(words().length<=4){L.msg='Mindestens vier Wörter müssen in der Liste bleiben, sonst funktionieren die Übungen nicht.';return render()}
+    L.msg='';if(S.custom.some(c=>c.en===v))S.custom=S.custom.filter(c=>c.en!==v);else if(!S.hidden.includes(v))S.hidden.push(v);
+    delete S.m[v];save();render()},
+  restore(){S.hidden=[];L.msg='';save();render()},
   reset1(){L.reset=true;render()}, reset0(){L.reset=false;render()},
   reset2(){S.xp=0;S.streak=0;S.last='';S.m={};S.best=0;save();L.reset=false;render()}
 };
@@ -343,7 +349,7 @@ document.addEventListener('submit',e=>{e.preventDefault();const f=e.target.datas
   if(f==='add'){const en=$('new-en').value.trim(),de=$('new-de').value.trim();
     if(!en||!de)L.err='Bitte beide Felder ausfüllen.';
     else if(words().some(w=>norm(w.en)===norm(en)))L.err='Dieses Wort steht schon in der Liste.';
-    else{L.err='';S.custom.push({en,de});save()}
+    else{L.err='';L.msg='';S.hidden=S.hidden.filter(h=>norm(h)!==norm(en));S.custom.push({en,de});save()}
     render()}
 });
 render();
